@@ -1,0 +1,237 @@
+//Link counter
+
+/*
+
+Counts ingoing link defined in the module
+
+*/
+
+//---------------------------------------------------
+//constants and definitions
+//---------------------------------------------------
+
+#include "addins/project/project_definitions.inc"
+
+#include "addins/project/attrcreate.inc"
+
+#include "addins/project/modulesetup.inc"
+
+//---------------------------------------------------
+
+
+const string In_LINKS_TOT = "Inlinks Tot No"
+const string In_LINKS_SETS = "Inlinks Sets No"
+const string IN_LINKS_DET = "In Links Detail"
+
+/**********************************
+*
+*/
+
+void incrementCoupling(int index, Array &couplingArr) {
+  int currNum
+  
+  currNum = (int get(couplingArr,2,index))
+  currNum++
+  
+  //Increment the number of links found for given coupling
+  put(couplingArr,currNum,2,index)
+  
+  return
+  
+}
+
+
+
+/**********************************
+*
+*/
+
+void addCoupling(string nTargetMod, nLinkMod, Array &couplingArr, int &couplingArrDim) {
+  
+  //Creates a new row in the array (target module, link module, 1)
+  // values in the order (module name, link module name, counting)
+  
+  put(couplingArr,nTargetMod,0,couplingArrDim)
+  put(couplingArr,nLinkMod,1,couplingArrDim)
+  put(couplingArr,1,2,couplingArrDim)
+  
+  //Increment array counter
+  couplingArrDim++
+  
+  return
+}
+
+
+
+/**********************************
+*
+*/
+
+int findCoupling(string nTargetMod, nLinkMod, Array &couplingArr, int &couplingArrDim) {
+  //searches the couple targetmodule - link module in the array
+  // -1 if not found, otherwise relevant index is returned
+  
+  //Array stores values in the order (module name, link module name, counting)
+  
+  int i, indexFound = -1
+  
+  for(i=0;i<couplingArrDim;i++){
+    
+    //check module name for this row
+    if(nTargetMod != (string get(couplingArr,0,i))){
+      continue
+    }
+    //check link module name for this row    
+    if(nLinkMod != (string get(couplingArr,1,i))){
+      continue
+    }
+    
+    //both nTargetMod and nLinkMod have been found if at this point:
+    //I can return the index number and break the loop
+    indexFound = i
+    break
+    
+  }
+      
+  return indexFound
+  
+}
+
+
+
+
+/**********************************
+*
+*/
+
+int findLinks(Object o, Array &couplingArr, int &couplingArrDim) {
+  
+  int foundCoupling, nCount = 0
+  
+  Link tgtLink
+  string actMod, actLink
+  
+  ModName_ otherMod = null
+   string linkModName = "*"
+  LinkRef lr
+  
+  //**
+  for lr in all(o<-linkModName) do {
+       otherMod = module (sourceVersion lr)
+        if (!null otherMod) {
+            if ((!isDeleted otherMod) && (null data(sourceVersion lr))) {
+                load((sourceVersion lr),false)
+            }
+        }
+  }
+  //**
+  
+  for tgtLink in o <- "*" do {
+
+    actMod =  fullName(target(tgtLink))
+     actMod =  fullName(source(tgtLink))
+    actLinkName =  fullName(module(tgtLink))
+   
+    
+  //  print "Source :" fullName(source(tgtLink))"\n"
+  //  print "Target:  "actMod "\n" 
+   // print "LinkName:  "actLinkName "\n"
+    
+    if(couplingArrDim > 0){
+      
+      foundCoupling = findCoupling(actMod,actLinkName, couplingArr, couplingArrDim)
+
+       
+      if(foundCoupling != -1){
+        incrementCoupling(foundCoupling, couplingArr)
+      } else {
+        addCoupling(actMod,actLinkName, couplingArr, couplingArrDim)
+      }
+      
+    } else {
+      addCoupling(actMod,actLinkName, couplingArr, couplingArrDim)
+    }
+     
+    
+    nCount++
+  }
+  
+  return nCount
+}
+
+
+
+/**********************************
+*  MAIN
+*/
+
+
+Module confModule = current
+Object cObj
+
+createLinkCountAttr(confModule)
+
+Module readModule
+Object rObj
+
+for cObj in confModule do {
+
+  if(cObj.MOD_PATH_ATTR "" != ""){
+    readModule = read(cObj.MOD_PATH_ATTR "", false)
+  }
+  if(null readModule){
+    print "skipped " cObj.MOD_PATH_ATTR "." "\n"
+    continue
+  }
+  
+  
+
+  //Array to store triples (module target, link module, no of links)
+  Array couplingArr = create(3,1)
+  int couplingArrDim = 0
+
+      
+  int numObjLinks, totLinks = 0, i, curNum, totLinksCheck = 0
+  
+//  print "Module name "name readModule "\n"
+  for rObj in readModule do {
+   
+    numObjLinks = findLinks(rObj,couplingArr,couplingArrDim)
+  
+    totLinks += numObjLinks
+    
+  }
+  
+  close readModule
+  
+  //REPORT
+  
+  Buffer out = create
+  
+  //Number of linksets
+  cObj.In_LINKS_SETS = couplingArrDim
+  //total link number
+  cObj.In_LINKS_TOT = totLinks
+  
+  for(i=0;i<couplingArrDim;i++){
+   
+   
+   curNum = (int get(couplingArr,2,i))
+   totLinksCheck += curNum
+   
+   out += "(" curNum " links)"
+   out += "--" name item (string get(couplingArr,1,i)) ""
+   Item resIt = item (string get(couplingArr,0,i))
+   out += "<--" name resIt " [" description resIt "]"
+   out += "\n" 
+   
+  
+  }
+  
+  
+  cObj.IN_LINKS_DET = out
+  
+  delete couplingArr
+  delete out
+  
+}
