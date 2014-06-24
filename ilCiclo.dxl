@@ -4,5 +4,5 @@ Module m = current
 Object o
 int i = 0
 for o in m do {
-  print "Fesso chi legge: " i++ "\n"
+  print "Fesso chi legge (ma non chi scrive): " i++ "\n"
 }
